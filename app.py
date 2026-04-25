@@ -87,4 +87,4 @@ with tab3:
 
 # ---------------- FOOTER ----------------
 st.markdown("---")
-st.markdown("🌱 Built with Streamlit | CO₂ + Fossil Fuel Analysis")
+st.markdown("Built with Streamlit | CO₂ + Fossil Fuel Analysis")
