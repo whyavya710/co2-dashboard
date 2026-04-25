@@ -18,12 +18,12 @@ fuel["country"] = fuel["country"].replace({
 })
 
 # ---------------- TITLE ----------------
-st.title("🌍 CO₂ Emissions Explorer")
+st.title("CO₂ Emissions Explorer")
 st.markdown("Explore total CO₂ emissions and fossil fuel sources (coal, oil, gas).")
 
 # ---------------- SIDEBAR ----------------
 countries = sorted(df["country_name"].unique())
-country = st.sidebar.selectbox("🌎 Select a country", countries)
+country = st.sidebar.selectbox("Select a country", countries)
 
 # ---------------- TOTAL EMISSIONS ----------------
 country_data = df[df["country_name"] == country].sort_values("year")
@@ -34,16 +34,16 @@ st.metric("Latest CO₂ Emissions", f"{latest_value:,.0f} kt")
 st.markdown("---")
 
 # ---------------- TABS ----------------
-tab1, tab2, tab3 = st.tabs(["📈 Total Emissions", "🔥 Fossil Fuel Breakdown", "⚖️ Compare Countries"])
+tab1, tab2, tab3 = st.tabs(["Total Emissions", "Fossil Fuel Breakdown", "Compare Countries"])
 
 # ---------------- TAB 1 ----------------
 with tab1:
-    st.subheader(f"📈 CO₂ Emissions Over Time — {country}")
+    st.subheader(f"CO₂ Emissions Over Time — {country}")
     st.line_chart(country_data.set_index("year")["co2"])
 
 # ---------------- TAB 2 ----------------
 with tab2:
-    st.subheader("🔥 Fossil Fuel Emissions (Coal, Oil, Gas)")
+    st.subheader("Fossil Fuel Emissions (Coal, Oil, Gas)")
 
     fuel_country = fuel[fuel["country"] == country]
 
@@ -66,7 +66,7 @@ with tab2:
 
 # ---------------- TAB 3 ----------------
 with tab3:
-    st.subheader("⚖️ Compare Countries")
+    st.subheader("Compare Countries")
 
     c1 = st.selectbox("Country 1", countries)
     c2 = st.selectbox("Country 2", countries, index=1)
