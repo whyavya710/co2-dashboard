@@ -1,35 +1,55 @@
 import streamlit as st
 import pandas as pd
 
-# Page setup
+# ---------------- PAGE SETUP ----------------
 st.set_page_config(page_title="CO₂ Explorer", layout="wide")
 
 # ---------------- MAIN DATASET ----------------
 df = pd.read_csv("co2_emissions_kt_by_country.csv")
 df = df.rename(columns={"value": "co2"})
 
+# Clean country names in main dataset
+df["country_name_clean"] = df["country_name"].astype(str).str.strip().str.lower()
+
 # ---------------- FOSSIL DATASET ----------------
 fuel = pd.read_csv("GCB2022v27_MtCO2_flat.csv")
-fuel.columns = fuel.columns.str.lower()
+fuel.columns = fuel.columns.str.strip().str.lower()
 
-# FIX: standardize country name mismatch
-fuel["country"] = fuel["country"].replace({
-    "United States of America": "United States"
+# Rename column if needed
+if "entity" in fuel.columns:
+    fuel = fuel.rename(columns={"entity": "country"})
+
+# Clean fossil country names
+fuel["country_clean"] = fuel["country"].astype(str).str.strip().str.lower()
+
+# Fix USA naming issues
+fuel["country_clean"] = fuel["country_clean"].replace({
+    "united states of america": "united states",
+    "usa": "united states",
+    "us": "united states"
 })
 
+# ---------------- KEEP ONLY MATCHING COUNTRIES ----------------
+valid_countries = sorted(
+    set(df["country_name_clean"]).intersection(set(fuel["country_clean"]))
+)
+
 # ---------------- TITLE ----------------
-st.title("CO₂ Emissions Explorer")
-st.markdown("Explore total CO₂ emissions and fossil fuel sources (coal, oil, gas).")
+st.title("🌍 CO₂ Emissions Explorer")
 
 # ---------------- SIDEBAR ----------------
-countries = sorted(df["country_name"].unique())
-country = st.sidebar.selectbox("Select a country", countries)
+country = st.sidebar.selectbox(
+    "Select a country",
+    [c.title() for c in valid_countries]
+)
 
-# ---------------- TOTAL EMISSIONS ----------------
-country_data = df[df["country_name"] == country].sort_values("year")
+# ---------------- FILTER DATA ----------------
+country_data = df[df["country_name_clean"] == country.lower()].sort_values("year")
+fuel_country = fuel[fuel["country_clean"] == country.lower()].sort_values("year")
 
-latest_value = country_data["co2"].iloc[-1]
-st.metric("Latest CO₂ Emissions", f"{latest_value:,.0f} kt")
+# ---------------- METRIC ----------------
+if not country_data.empty:
+    st.metric("Latest CO₂ Emissions", f"{country_data['co2'].iloc[-1]:,.0f} kt")
 
 st.markdown("---")
 
@@ -39,20 +59,20 @@ tab1, tab2, tab3 = st.tabs(["Total Emissions", "Fossil Fuel Breakdown", "Compare
 # ---------------- TAB 1 ----------------
 with tab1:
     st.subheader(f"CO₂ Emissions Over Time — {country}")
-    st.line_chart(country_data.set_index("year")["co2"])
+
+    if not country_data.empty:
+        st.line_chart(country_data.set_index("year")["co2"])
+    else:
+        st.warning("No CO₂ data available.")
 
 # ---------------- TAB 2 ----------------
 with tab2:
     st.subheader("Fossil Fuel Emissions (Coal, Oil, Gas)")
 
-    fuel_country = fuel[fuel["country"] == country]
-
     if fuel_country.empty:
         st.warning("No fossil fuel data available for this country.")
     else:
-        latest = fuel_country.sort_values("year").iloc[-1]
-
-        st.write("Latest Fossil Fuel Breakdown:")
+        latest = fuel_country.iloc[-1]
 
         st.metric("Coal", f"{latest.get('coal', 0):,.0f} MtCO₂")
         st.metric("Oil", f"{latest.get('oil', 0):,.0f} MtCO₂")
@@ -68,22 +88,23 @@ with tab2:
 with tab3:
     st.subheader("Compare Countries")
 
-    c1 = st.selectbox("Country 1", countries)
-    c2 = st.selectbox("Country 2", countries, index=1)
+    c1 = st.selectbox("Country 1", valid_countries)
+    c2 = st.selectbox("Country 2", valid_countries, index=1)
 
-    data1 = df[df["country_name"] == c1].sort_values("year")
-    data2 = df[df["country_name"] == c2].sort_values("year")
+    d1 = df[df["country_name_clean"] == c1]
+    d2 = df[df["country_name_clean"] == c2]
 
     compare_df = pd.DataFrame({
-        c1: data1.set_index("year")["co2"],
-        c2: data2.set_index("year")["co2"]
-    })
+        c1.title(): d1.set_index("year")["co2"],
+        c2.title(): d2.set_index("year")["co2"]
+    }).dropna()
 
-    # Normalize comparison (fix graph issue)
-    compare_df = compare_df / compare_df.iloc[0] * 100
-
-    st.line_chart(compare_df)
-    st.caption("Normalized comparison (both start at 100 for fair trend comparison)")
+    if not compare_df.empty:
+        compare_df = compare_df / compare_df.iloc[0] * 100
+        st.line_chart(compare_df)
+        st.caption("Normalized comparison (both start at 100)")
+    else:
+        st.warning("Not enough data for comparison.")
 
 # ---------------- FOOTER ----------------
 st.markdown("---")
