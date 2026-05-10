@@ -101,7 +101,6 @@ with tab3:
 
     if not compare_df.empty:
         compare_df = compare_df / compare_df.iloc[0] * 100
-        compare_df.index = compare_df.index.astype(str)
         st.line_chart(compare_df)
         st.caption("Normalized comparison (both start at 100)")
     else:
