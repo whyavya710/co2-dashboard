@@ -67,7 +67,7 @@ with tab1:
 
 # ---------------- TAB 2 ----------------
 with tab2:
-    st.subheader("Fossil Fuel Emissions (Coal, Oil, Gas) for ", country)
+    st.subheader(f"Fossil Fuel Emissions (Coal, Oil, Gas) for {country}")
 
     if fuel_country.empty:
         st.warning("No fossil fuel data available for this country.")
