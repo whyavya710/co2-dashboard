@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 
 # ---------------- PAGE SETUP ----------------
 st.set_page_config(page_title="CO₂ Explorer", layout="wide")
@@ -69,20 +68,12 @@ with tab1:
     st.markdown("---")
 
     # GRAPH
-    fig1 = px.line(
-        country_data,
-        x="year",
-        y="co2",
-        title=f"CO₂ Emissions for {country}"
-    )
+    st.subheader(f"CO₂ Emissions for {country}")
 
-    fig1.update_layout(
-        xaxis_title="Year",
-        yaxis_title="CO₂ Emissions (kt)",
-        xaxis_tickangle=0
-    )
+    chart_data = country_data.set_index("year")[["co2"]]
+    st.line_chart(chart_data)
 
-    st.plotly_chart(fig1, use_container_width=True)
+    st.caption("X-axis: Year | Y-axis: CO₂ Emissions (kt)")
 
 # =====================================================
 # TAB 2 - FOSSIL FUEL EMISSIONS
@@ -99,19 +90,15 @@ with tab2:
 
     if not fuel_country.empty:
 
-        fig2 = px.line(
-            fuel_country,
-            x="year",
-            y=["coal_co2", "oil_co2", "gas_co2"]
-        )
+        fuel_chart = fuel_country.set_index("year")[
+            ["coal_co2", "oil_co2", "gas_co2"]
+        ]
 
-        fig2.update_layout(
-            xaxis_title="Year",
-            yaxis_title="Fossil Fuel Emissions",
-            xaxis_tickangle=0
-        )
+        st.line_chart(fuel_chart)
 
-        st.plotly_chart(fig2, use_container_width=True)
+        st.caption(
+            "X-axis: Year | Y-axis: Fossil Fuel Emissions"
+        )
 
     else:
         st.warning("No fossil fuel data available for this country.")
@@ -139,23 +126,15 @@ with tab3:
         # NORMALIZE
         compare_df = compare_df / compare_df.iloc[0] * 100
 
-        compare_df = compare_df.reset_index()
+        st.line_chart(compare_df)
 
-        fig3 = px.line(
-            compare_df,
-            x="year",
-            y=compare_df.columns[1:]
+        st.caption(
+            "X-axis: Year | Y-axis: Normalized CO₂ Emissions"
         )
 
-        fig3.update_layout(
-            xaxis_title="Year",
-            yaxis_title="Normalized CO₂ Emissions",
-            xaxis_tickangle=0
+        st.caption(
+            "Normalized comparison (both countries start at 100)"
         )
-
-        st.plotly_chart(fig3, use_container_width=True)
-
-        st.caption("Normalized comparison (both start at 100)")
 
     else:
         st.warning("Not enough data for comparison.")
