@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verdant Arena</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #142020; color: #f1eed7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 12px; }
+    main { width: min(100%, 960px); }
+    canvas { display: block; width: 100%; height: auto; border-radius: 12px; outline: none; touch-action: none; }
+    p { margin: 10px 4px 0; color: #9eb19e; font-size: 14px; text-align: center; }
+  </style>
+</head>
+<body>
+  <main>
+    <canvas id="game" width="960" height="700" tabindex="0" aria-label="Verdant Arena game"></canvas>
+    <p>WASD / arrows to move · Space or click to strike · R to restart · Esc to quit</p>
+  </main>
+  <script>
+    "use strict";
+    const canvas = document.querySelector("#game");
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+    const arena = { x: 24, y: 94, w: 912, h: 550 };
+    const colors = {
+      ink: "#142020", panel: "#1d2f2b", field: "#2d503f", grid: "#365b45",
+      mint: "#9de7be", gold: "#f6ca6f", coral: "#f06f5d", paper: "#f1eed7",
+      muted: "#9eb19e"
+    };
+    const keys = new Set();
+    let player, enemies, pickups, wave, score, kills, facing, cooldown, flash;
+    let invulnerable, waveTimer, notice, noticeTimer, gameOver, lastTime;
+
+    function reset() {
+      player = { x: arena.x + arena.w / 2, y: arena.y + arena.h / 2, hp: 100, maxHp: 100, speed: 245, radius: 17 };
+      enemies = [];
+      pickups = [];
+      wave = 1;
+      score = 0;
+      kills = 0;
+      facing = { x: 1, y: 0 };
+      cooldown = flash = invulnerable = waveTimer = 0;
+      notice = "Clear the arena";
+      noticeTimer = 1.5;
+      gameOver = false;
+      spawnWave();
+    }
+
+    function spawnWave() {
+      for (let i = 0; i < 2 + wave; i++) {
+        const side = Math.floor(Math.random() * 4);
+        let x, y;
+        if (side < 2) {
+          x = 70 + Math.random() * (W - 140);
+          y = side === 0 ? arena.y + 30 : arena.y + arena.h - 30;
+        } else {
+          x = side === 2 ? arena.x + 30 : arena.x + arena.w - 30;
+          y = 140 + Math.random() * (arena.y + arena.h - 45 - 140);
+        }
+        enemies.push({ x, y, hp: 34 + wave * 7, maxHp: 34 + wave * 7, attack: 8 + wave, speed: 72 + Math.min(wave * 4, 45), radius: 16 });
+      }
+      notice = `Wave ${wave}`;
+      noticeTimer = 1.3;
+    }
+
+    function attack() {
+      if (cooldown > 0 || gameOver) return;
+      cooldown = 0.36;
+      flash = 0.18;
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i], dx = enemy.x - player.x, dy = enemy.y - player.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance > 94 || (distance > 0 && (facing.x * dx + facing.y * dy) / distance < 0.35)) continue;
+        enemy.hp -= 30;
+        if (enemy.hp <= 0) {
+          enemies.splice(i, 1);
+          kills++;
+          score += 100 + wave * 10;
+          if (Math.random() < 0.25) pickups.push({ x: enemy.x, y: enemy.y, life: 12 });
+        }
+      }
+    }
+
+    function aimAt(event) {
+      const bounds = canvas.getBoundingClientRect();
+      const x = (event.clientX - bounds.left) * W / bounds.width;
+      const y = (event.clientY - bounds.top) * H / bounds.height;
+      const dx = x - player.x, dy = y - player.y, distance = Math.hypot(dx, dy);
+      if (distance) facing = { x: dx / distance, y: dy / distance };
+    }
+
+    function onKeyDown(event) {
+      const key = event.key.toLowerCase();
+      if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) event.preventDefault();
+      keys.add(key);
+      if (key === " " && !event.repeat) attack();
+      if (key === "r" && gameOver) reset();
+      if (key === "escape") gameOver = true;
+    }
+
+    function update(dt) {
+      if (gameOver) return;
+      cooldown = Math.max(0, cooldown - dt);
+      flash = Math.max(0, flash - dt);
+      invulnerable = Math.max(0, invulnerable - dt);
+      noticeTimer = Math.max(0, noticeTimer - dt);
+      let dx = Number(keys.has("d") || keys.has("arrowright")) - Number(keys.has("a") || keys.has("arrowleft"));
+      let dy = Number(keys.has("s") || keys.has("arrowdown")) - Number(keys.has("w") || keys.has("arrowup"));
+      const length = Math.hypot(dx, dy);
+      if (length) {
+        dx /= length; dy /= length;
+        facing = { x: dx, y: dy };
+        player.x += dx * player.speed * dt;
+        player.y += dy * player.speed * dt;
+      }
+      player.x = Math.max(arena.x + 22, Math.min(arena.x + arena.w - 22, player.x));
+      player.y = Math.max(arena.y + 22, Math.min(arena.y + arena.h - 22, player.y));
+
+      for (const enemy of enemies) {
+        const ex = player.x - enemy.x, ey = player.y - enemy.y, distance = Math.hypot(ex, ey);
+        if (distance > player.radius + enemy.radius + 3 && distance) {
+          enemy.x += ex / distance * enemy.speed * dt;
+          enemy.y += ey / distance * enemy.speed * dt;
+        } else if (invulnerable <= 0) {
+          player.hp = Math.max(0, player.hp - enemy.attack);
+          invulnerable = 0.72;
+          if (!player.hp) { gameOver = true; break; }
+        }
+      }
+
+      for (let i = pickups.length - 1; i >= 0; i--) {
+        const pickup = pickups[i];
+        pickup.life -= dt;
+        if (pickup.life <= 0) { pickups.splice(i, 1); continue; }
+        if (Math.hypot(player.x - pickup.x, player.y - pickup.y) < 30) {
+          const healed = Math.min(22, player.maxHp - player.hp);
+          player.hp += healed;
+          if (healed) { notice = "Health restored"; noticeTimer = 0.8; }
+          pickups.splice(i, 1);
+        }
+      }
+
+      if (!enemies.length) {
+        if (waveTimer <= 0) { waveTimer = 1.5; notice = "Arena clear"; }
+        waveTimer -= dt;
+        if (waveTimer <= 0) { wave++; player.hp = Math.min(player.maxHp, player.hp + 12); spawnWave(); }
+      }
+    }
+
+    function text(value, x, y, size, color, align = "left", weight = 700) {
+      ctx.fillStyle = color;
+      ctx.font = `${weight} ${size}px system-ui, sans-serif`;
+      ctx.textAlign = align;
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(value, x, y);
+    }
+
+    function drawCharacter(character, isPlayer = false) {
+      const x = Math.round(character.x), y = Math.round(character.y);
+      ctx.fillStyle = "#1b2f29";
+      ctx.beginPath(); ctx.ellipse(x, y + 18, 19, 6, 0, 0, Math.PI * 2); ctx.fill();
+      if (isPlayer && invulnerable > 0 && Math.floor(invulnerable * 18) % 2) return;
+      if (isPlayer) {
+        ctx.fillStyle = "#66b98f";
+        ctx.beginPath(); ctx.moveTo(x, y - 13); ctx.lineTo(x + 17, y + 15); ctx.lineTo(x, y + 9); ctx.lineTo(x - 17, y + 15); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#ebbe84"; ctx.beginPath(); ctx.arc(x, y - 8, 10, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = colors.ink; ctx.beginPath(); ctx.arc(x + Math.round(facing.x * 7) + 3, y - 8 + Math.round(facing.y * 7), 2, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.fillStyle = "#b24b41";
+        ctx.beginPath(); ctx.moveTo(x - 15, y - 2); ctx.lineTo(x - 10, y - 15); ctx.lineTo(x - 3, y - 9); ctx.lineTo(x + 4, y - 18); ctx.lineTo(x + 10, y - 8); ctx.lineTo(x + 16, y - 2); ctx.lineTo(x + 11, y + 13); ctx.lineTo(x - 11, y + 13); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#f7a170"; ctx.beginPath(); ctx.arc(x, y - 2, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = colors.ink;
+        for (const eyeX of [x - 3, x + 4]) { ctx.beginPath(); ctx.arc(eyeX, y - 3, 2, 0, Math.PI * 2); ctx.fill(); }
+        ctx.fillStyle = colors.ink; ctx.fillRect(x - 14, y - 27, 28, 4);
+        ctx.fillStyle = colors.coral; ctx.fillRect(x - 14, y - 27, 28 * character.hp / character.maxHp, 4);
+      }
+    }
+
+    function draw() {
+      ctx.fillStyle = colors.ink; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = colors.panel; ctx.beginPath(); ctx.roundRect(arena.x - 4, arena.y - 4, arena.w + 8, arena.h + 8, 18); ctx.fill();
+      ctx.fillStyle = colors.field; ctx.beginPath(); ctx.roundRect(arena.x, arena.y, arena.w, arena.h, 14); ctx.fill();
+      ctx.strokeStyle = colors.grid; ctx.lineWidth = 1;
+      for (let x = arena.x + 20; x < arena.x + arena.w; x += 42) { ctx.beginPath(); ctx.moveTo(x, arena.y + 12); ctx.lineTo(x, arena.y + arena.h - 12); ctx.stroke(); }
+      for (let y = arena.y + 18; y < arena.y + arena.h; y += 42) { ctx.beginPath(); ctx.moveTo(arena.x + 12, y); ctx.lineTo(arena.x + arena.w - 12, y); ctx.stroke(); }
+      ctx.strokeStyle = "#5b7e57"; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(arena.x, arena.y, arena.w, arena.h, 14); ctx.stroke();
+      for (const pickup of pickups) {
+        ctx.fillStyle = colors.mint; ctx.beginPath(); ctx.arc(pickup.x, pickup.y, 10, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#30714e"; ctx.fillRect(pickup.x - 2, pickup.y - 6, 4, 12); ctx.fillRect(pickup.x - 6, pickup.y - 2, 12, 4);
+      }
+      for (const enemy of enemies) drawCharacter(enemy);
+      if (flash) {
+        const x1 = player.x + facing.x * 22, y1 = player.y + facing.y * 22;
+        const x2 = player.x + facing.x * 70, y2 = player.y + facing.y * 70;
+        ctx.strokeStyle = colors.gold; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.fillStyle = colors.paper; ctx.beginPath(); ctx.arc(x2, y2, 5, 0, Math.PI * 2); ctx.fill();
+      }
+      drawCharacter(player, true);
+      ctx.strokeStyle = "#3a4c43"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(26, 82); ctx.lineTo(W - 26, 82); ctx.stroke();
+      text("VERDANT ARENA", 28, 35, 25, colors.paper);
+      text("ASTRA / SEEDKEEPER", 30, 55, 12, colors.mint);
+      ctx.fillStyle = colors.panel; ctx.beginPath(); ctx.roundRect(300, 21, 220, 17, 8); ctx.fill();
+      if (player.hp) { ctx.fillStyle = player.hp > 35 ? colors.mint : colors.coral; ctx.beginPath(); ctx.roundRect(302, 23, 216 * player.hp / player.maxHp, 13, 7); ctx.fill(); }
+      text(`VITALITY ${player.hp}/${player.maxHp}`, 301, 55, 12, colors.muted);
+      text(`WAVE ${String(wave).padStart(2, "0")}`, 588, 40, 16, colors.gold);
+      text(`${enemies.length} THREATS REMAINING`, 588, 58, 12, colors.muted);
+      text(String(score).padStart(6, "0"), 850, 40, 16, colors.paper);
+      text("SCORE", 875, 58, 12, colors.muted);
+      if (noticeTimer > 0 && !gameOver) {
+        ctx.font = "700 16px system-ui, sans-serif";
+        const width = ctx.measureText(notice.toUpperCase()).width + 34;
+        ctx.fillStyle = colors.panel; ctx.beginPath(); ctx.roundRect((W - width) / 2, arena.y + 9, width, 34, 12); ctx.fill();
+        text(notice.toUpperCase(), W / 2, arena.y + 32, 16, colors.paper, "center");
+      }
+      text("WASD / ARROWS MOVE", 28, 680, 12, colors.muted);
+      text("SPACE OR CLICK STRIKE", 248, 680, 12, colors.muted);
+      text("GREEN ORBS HEAL", 510, 680, 12, colors.muted);
+      text("ESC QUIT", 790, 680, 12, colors.muted);
+      if (gameOver) {
+        ctx.fillStyle = "rgba(10, 19, 18, 0.78)"; ctx.fillRect(0, 0, W, H);
+        text(kills ? "THE GROVE WENT QUIET" : "GAME PAUSED", W / 2, 302, 25, colors.paper, "center");
+        text(`${kills} brambles cleared / score ${score}`, W / 2, 338, 16, colors.mint, "center");
+        text("PRESS R TO PLAY AGAIN", W / 2, 380, 12, colors.gold, "center");
+      }
+    }
+
+    function frame(time) {
+      const dt = Math.min((time - lastTime) / 1000 || 0, 0.04);
+      lastTime = time;
+      update(dt);
+      draw();
+      requestAnimationFrame(frame);
+    }
+
+    canvas.addEventListener("pointerdown", event => {
+      canvas.focus();
+      aimAt(event);
+      attack();
+    });
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", event => keys.delete(event.key.toLowerCase()));
+    window.addEventListener("blur", () => keys.clear());
+    reset();
+    canvas.focus();
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
